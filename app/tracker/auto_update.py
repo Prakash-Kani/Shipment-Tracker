@@ -93,6 +93,7 @@ class TruckWorkflowState:
         route_to: str,
         reply_number: str,
         interval: int,
+        whatsapp:bool,
     ):
         self.truck_number = truck_number
         self.job_number = job_number
@@ -102,6 +103,8 @@ class TruckWorkflowState:
         self.reply_number = reply_number
 
         self.interval = interval
+
+        self.whatsapp = whatsapp
 
         self.paused = False
         self.next_update_at = (
@@ -347,6 +350,7 @@ async def run_auto_in_transit_updates(truck: TruckWorkflowState):
                     route_from=truck.route_from,
                     route_to=truck.route_to,
                     reply_number=truck.reply_number,
+                    whatsapp=truck.whatsapp
                 )
             except Exception as exc:
                 # Don't let a transient send failure kill the loop —
@@ -415,6 +419,7 @@ async def handle_workflow_transition(payload: "StatusRequest"):
                 route_to=payload.route_to,
                 reply_number=payload.reply_number,
                 interval=payload.interval,
+                whatsapp=payload.whatsapp
             )
             trucks[truck_number] = truck
             truck.task = asyncio.create_task(run_auto_in_transit_updates(truck))
