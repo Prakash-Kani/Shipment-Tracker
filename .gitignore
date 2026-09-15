@@ -12,6 +12,8 @@ build/
 develop-eggs/
 dist/
 downloads/
+app/logs/
+*.log
 eggs/
 .eggs/
 lib/

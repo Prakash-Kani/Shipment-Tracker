@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "case_write_up"
+version = "1.0"
+requires-python = ">=3.12.8"
+
+dependencies = [
+"fastapi_mail",
+"fastapi[standard]",
+"starlette",
+"uvicorn[standard]",
+"sqlalchemy[asyncio]",
+"pydantic",
+"pydantic-settings",
+"python-jose[cryptography]==3.3.0",
+"passlib==1.7.4",
+"bcrypt==4.0.1",
+"python-dotenv",
+"jinja2",
+"aiomysql",
+"python-multipart",
+"python-dotenv==1.0.0",
+"aiomysql==0.2.0",
+"gunicorn",
+"pydantic[email]",
+"user-agents",
+"httpx",
+"requests",
+"tzdata",
+]
+
+[tool.setuptools]
+packages = ["app"]
+
+[tool.fastapi]
+entrypoint = "app.main:app"
