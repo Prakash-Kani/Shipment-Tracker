@@ -99,9 +99,12 @@ def get_trucks_current_status_t_cart(
     return trucks_sorted
 
 def get_status(status):
-    url = f"{settings.tcard_base_url}/api/statuses/{status}"
+    url = f"{settings.tcard_base_url}/api/status"
 
-    response = requests.get(url)
+    response = requests.get(url,
+                            params={
+                                        "status": status
+                                    })
 
     response.raise_for_status()
 
