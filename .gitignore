@@ -14,6 +14,7 @@ dist/
 downloads/
 app/logs/
 *.log
+*copy.py
 eggs/
 .eggs/
 lib/

@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     whatsapp_token: str = os.getenv("WHATSAPP_TOKEN", "")
     phone_number_id: str = os.getenv("PHONE_NUMBER_ID", "")
 
+    twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    twilio_auth_key: str = os.getenv("TWILIO_AUTH_KEY", "")
+
     gps_key: str = os.getenv("GPS_KEY", "")
     gps_base_url: str = os.getenv("GPS_BASE_URL", "")
 

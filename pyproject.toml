@@ -30,6 +30,7 @@ dependencies = [
 "httpx",
 "requests",
 "tzdata",
+"twilio",
 ]
 
 [tool.setuptools]
