@@ -16,6 +16,10 @@ import httpx
 import logging
 from logging.handlers import RotatingFileHandler
 
+log_dir = "app/logs"
+os.makedirs(log_dir, exist_ok=True)
+
+log_file = os.path.join(log_dir, "whatsapp_webhook.log")
 # Configure logger
 logger = logging.getLogger("app/logs/whatsapp_webhook")
 logger.setLevel(logging.INFO)
