@@ -24,7 +24,9 @@ class Settings(BaseSettings):
 
     gps_key: str = os.getenv("GPS_KEY", "")
     gps_base_url: str = os.getenv("GPS_BASE_URL", "")
-
+    
+    gmap_key: str = os.getenv("GMAP_KEY", "")
+    
     tcard_base_url: str = os.getenv("TCARD_BASE_URL", "")
     # admin_api_key: str = os.getenv("admin_api_key", "")
 

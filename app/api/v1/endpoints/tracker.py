@@ -8,6 +8,16 @@ from app.tracker.auto_update import  send_status_message, handle_workflow_transi
 from app.schemas.tracker import *
 from app.tracker.messanger import send_whatsapp_message
 from app.tracker.direct_chat import process_shipment_bot
+from app.tracker.auto_distance_update import (
+    DistanceTrackingRequest,
+    RouteMilestoneRequest,
+    start_distance_tracking,
+    handle_distance_workflow_transition,
+    stop_distance_tracking,
+    get_distance_tracking_state,
+    shutdown_distance_tracking,
+    build_route_milestones
+)
 import os
 import json
 from datetime import datetime, timezone
@@ -256,6 +266,7 @@ async def create_in_transit_status_endpoint(
       - Arrived at Delivery Hub / Delivered /
         Cancelled-Returned                          -> stops it for good
     """
+    print('payload', payload)
 
     # Always send the message for the status that was actually requested
     # (unchanged behavior).
@@ -321,3 +332,28 @@ async def create_in_transit_status_endpoint(
     }
 
 
+
+
+
+@router.post("/distance-tracking/start")
+async def start(payload: DistanceTrackingRequest):
+    return await start_distance_tracking(payload)
+
+@router.get("/distance-tracking/{truck_number}")
+async def state(truck_number: str):
+    return get_distance_tracking_state(truck_number)
+
+@router.post("/distance-tracking/{truck_number}/status")
+async def manual_status(truck_number: str, status: ShipmentStatus):
+    await handle_distance_workflow_transition(truck_number, status)
+    return {"ok": True}
+
+@router.delete("/distance-tracking/{truck_number}")
+async def stop(truck_number: str):
+    await stop_distance_tracking(truck_number)
+    return {"ok": True}
+
+
+@router.post("/milestones/build")
+async def build_milestones_route(payload: RouteMilestoneRequest):
+    return await build_route_milestones(payload)

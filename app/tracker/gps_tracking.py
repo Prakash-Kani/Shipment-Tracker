@@ -105,8 +105,3 @@ def get_car_status(car_number="", session_id = gps_login()):
     response.raise_for_status()
 
     return response.json()
-
-
-
-
-
