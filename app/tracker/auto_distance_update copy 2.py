@@ -52,7 +52,6 @@ EXCEPTION_STATUSES = {
     ShipmentStatus.WEATHER_ROAD_DELAY,
 }
 
-
 # ============ Distance-Based Automatic Shipment-Status Workflow ============
 #
 #   Get GPS -> distance to ACTIVE milestone -> pick next poll interval
@@ -201,6 +200,18 @@ CHECKPOINTS: Dict[str, List[Tuple[float, float]]] = {
         (1.443037, 103.768157),
         (1.452786, 103.769093),
     ],
+    "Second link CIQ": [
+        (1.376594, 103.601376),
+        (1.379333, 103.595744)
+    ],
+    "Johor Bahru Checkpoint CIQ": [
+        (1.459125, 103.767396),
+        (1.467766, 103.768494)
+    ],
+    "Thailand": [
+            (6.508181, 100.420908),
+            (6.579055, 100.411309)
+        ],
 }
 
 
@@ -1220,14 +1231,8 @@ async def start_distance_tracking(payload: DistanceTrackingRequest) -> dict:
             existing.paused = True          # so its cleanup doesn't pop the new record
             existing.task.cancel()
         distance_trackers[payload.truck_number] = tracker
+        tracker.task = asyncio.create_task(run_distance_tracking(tracker))
 
-    # Send "Awaiting Pickup" synchronously (not on the first GPS tick) so it is
-    # guaranteed to have gone out before this call returns - important for
-    # manual/advance-by-curl flows that may call /advance immediately after.
-    if tracker.shipment_status == ShipmentStatus.BOOKED:
-        await emit_status(tracker, ShipmentStatus.AWAITING_PICKUP, None)
-
-    tracker.task = asyncio.create_task(run_distance_tracking(tracker))
     return tracker.to_dict()
 
 
@@ -1273,84 +1278,6 @@ async def stop_distance_tracking(truck_number: str):
             existing.finished = True
             if existing.task:
                 existing.task.cancel()
-
-
-class ManualAdvanceRequest(BaseModel):
-    # Optional: resume automatic GPS-based tracking from the new active
-    # milestone right after this call. Defaults to staying in manual mode so
-    # repeated /advance calls keep walking the shipment forward on demand.
-    resume_gps_tracking: bool = False
-
-
-async def advance_milestone_manually(truck_number: str, payload: ManualAdvanceRequest = None) -> dict:
-    """
-    Manually completes the CURRENT active milestone and sends its status
-    message (DB save + WhatsApp), without waiting for GPS. Each call moves
-    the shipment forward by exactly one step:
-
-        Awaiting Pickup -> [call] -> Picked Up + In Transit
-        (transit / border / customs milestone) -> [call] -> that milestone's status, next becomes active
-        Arrived-at-delivery step -> [call] -> Arrived at Delivery Hub
-        Arrived at Delivery Hub -> [call] -> Delivered (shipment finishes)
-
-    Delivery is two calls (arrival, then completion) because those are two
-    distinct business events in the spec; every other milestone is one call.
-    Pauses/stops GPS polling for this truck unless resume_gps_tracking=True.
-    """
-    payload = payload or ManualAdvanceRequest()
-
-    async with distance_trackers_lock:
-        t = distance_trackers.get(truck_number)
-    if not t:
-        raise HTTPException(
-            status_code=404,
-            detail="No active tracker for this truck. Call /distance-tracking/start first.",
-        )
-    if t.finished:
-        raise HTTPException(status_code=400, detail="This shipment is already finished.")
-
-    if t.task:
-        t.task.cancel()
-        t.task = None
-    t.paused = True
-
-    now = _now()
-    ms = t.active
-
-    if ms.type == "pickup":
-        if not t.picked_up_sent:
-            await emit_status(t, ShipmentStatus.PICKED_UP, None)
-            t.picked_up_sent = True
-        await emit_status(t, ShipmentStatus.IN_TRANSIT, None)
-        ms.arrived_at = ms.arrived_at or now
-        ms.departed_at = now
-        _complete(t, ms, now)
-
-    elif ms.type == "delivery":
-        if t.shipment_status != ShipmentStatus.ARRIVED_AT_DELIVERY_HUB:
-            ms.arrived_at = ms.arrived_at or now
-            await emit_status(t, ShipmentStatus.ARRIVED_AT_DELIVERY_HUB, None)
-        else:
-            await emit_status(t, ShipmentStatus.DELIVERED, None)
-            ms.departed_at = now
-            _complete(t, ms, now)  # last milestone -> t.finished = True
-
-    else:  # transit / border / customs - one call, one status, move on
-        status = PASS_THROUGH_MILESTONE_STATUS[ms.type]
-        ms.arrived_at = ms.arrived_at or now
-        await emit_status(t, status, None)
-        ms.departed_at = now
-        _complete(t, ms, now)
-
-    if payload.resume_gps_tracking and not t.finished:
-        t.paused = False
-        t.next_gps_check = _now()
-        t.task = asyncio.create_task(run_distance_tracking(t))
-    elif t.finished:
-        async with distance_trackers_lock:
-            distance_trackers.pop(truck_number, None)
-
-    return t.to_dict()
 
 
 def get_distance_tracking_state(truck_number: str) -> Optional[dict]:

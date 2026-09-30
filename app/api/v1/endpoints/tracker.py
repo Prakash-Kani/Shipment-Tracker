@@ -11,6 +11,9 @@ from app.tracker.direct_chat import process_shipment_bot
 from app.tracker.auto_distance_update import (
     DistanceTrackingRequest,
     RouteMilestoneRequest,
+    ManualAdvanceRequest,
+    advance_milestone_manually,
+
     start_distance_tracking,
     handle_distance_workflow_transition,
     stop_distance_tracking,
@@ -357,3 +360,8 @@ async def stop(truck_number: str):
 @router.post("/milestones/build")
 async def build_milestones_route(payload: RouteMilestoneRequest):
     return await build_route_milestones(payload)
+
+
+@router.post("/distance-tracking/{truck_number}/advance")
+async def advance(truck_number: str, payload: ManualAdvanceRequest = ManualAdvanceRequest()):
+    return await advance_milestone_manually(truck_number, payload)

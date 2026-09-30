@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     
     tcard_base_url: str = os.getenv("TCARD_BASE_URL", "")
     # admin_api_key: str = os.getenv("admin_api_key", "")
+    self_health_url: str = os.getenv("SELF_HEALTH_URL", "")
 
     # secret_key: str
     # algorithm: str = "HS256"
