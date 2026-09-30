@@ -140,8 +140,7 @@ def calculate_driving_distance(
     from_lat,
     from_lng,
     to_lat,
-    to_lng, 
-    n_points = 7
+    to_lng
 ):
     """
     Calculate actual driving distance and travel duration
@@ -197,9 +196,6 @@ def calculate_driving_distance(
     response.raise_for_status()
 
     data = response.json()
-    print(data)
-
-
 
     routes = data.get("routes", [])
 
@@ -210,25 +206,6 @@ def calculate_driving_distance(
         }
 
     route = routes[0]
-
-
-    # route polyline points
-    encoded = data['routes'][0]['legs'][0]['polyline']['encodedPolyline']
-    points = decode_polyline(encoded,
-                    from_lat,
-                    from_lng,
-                    to_lat,
-                    to_lng,
-                    n_points = 7)
-
-    # get milestone
-
-    milestones, url_ = get_milestone(from_lat,
-                from_lng,
-                to_lat,
-                to_lng,
-                points,
-                n_points = 7)
 
 
     # ----------------------------------------
@@ -267,6 +244,27 @@ def calculate_driving_distance(
             f"{minutes} min"
         )
 
+    n_points = calculate_n_points(distance_km)
+    # route polyline points
+    encoded = data['routes'][0]['legs'][0]['polyline']['encodedPolyline']
+    points = decode_polyline(encoded,
+                    from_lat,
+                    from_lng,
+                    to_lat,
+                    to_lng,
+                    n_points)
+
+    # get milestone
+
+    milestones, url_ = get_milestone(from_lat,
+                from_lng,
+                to_lat,
+                to_lng,
+                points,
+                n_points)
+
+
+
     return {
         "success": True,
         "distance_km": distance_km,
@@ -277,3 +275,21 @@ def calculate_driving_distance(
         "route_polylines": points,
         "route_url": url_,
     }
+
+def calculate_n_points(distance_km):
+    n_point = 2
+
+    if distance_km <= 200 :       # < 100 m
+        n_point += 1
+    elif distance_km <= 300:       # < 1 km
+        n_point += 2
+    elif distance_km <= 500:       # < 1 km
+            n_point += 4
+    elif distance_km <= 700:       # < 1 km
+            n_point += 5
+    else:
+        n_point += 5
+
+    return n_point
+
+

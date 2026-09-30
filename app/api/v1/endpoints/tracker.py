@@ -266,7 +266,7 @@ async def create_in_transit_status_endpoint(
       - Arrived at Delivery Hub / Delivered /
         Cancelled-Returned                          -> stops it for good
     """
-    print('payload', payload)
+    
 
     # Always send the message for the status that was actually requested
     # (unchanged behavior).

@@ -84,7 +84,7 @@ def get_car_status(car_number="", session_id = gps_login()):
     url = f"{BASE_URL}/car/log_data/car_status"
 
     car_number = clean_truck_no(car_number).upper()
-    print("car_number", car_number)
+    
 
     headers = {
         "Authorization": f"Bearer {session_id}",
