@@ -1,4 +1,5 @@
 import httpx
+import requests
 from app.core.config import settings
 from twilio.rest import Client
 
@@ -12,7 +13,7 @@ client = Client(
     twilio_auth_token
 )
 
-async def send_whatsapp_message(to: str, message: str):
+async def send_whatsapp_message1(to: str, message: str):
     # return "please uncomment send whatsapp message function"
 
     url = (
@@ -47,6 +48,44 @@ async def send_whatsapp_message(to: str, message: str):
     response.raise_for_status()
 
     return response
+
+# sends the same message to multiple users
+async def send_whatsapp_message(to: str, message: str):
+    # return "please uncomment send whatsapp message function"
+    results = []
+    url = (
+        f"https://graph.facebook.com/v23.0/"
+        f"{PHONE_NUMBER_ID}/messages"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    for phone_number in to.split(','):
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone_number,
+            "type": "text",
+            "text": {
+                "body": message
+            }
+        }
+
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+
+        results.append({
+            "phone_number": phone_number,
+            "status_code": response.status_code,
+            "response": response.json()
+        })
+
+    return results
 
 
 

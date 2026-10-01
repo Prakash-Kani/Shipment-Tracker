@@ -276,19 +276,14 @@ def calculate_driving_distance(
         "route_url": url_,
     }
 
-def calculate_n_points(distance_km):
+def calculate_n_points(distance_km, km = 70):
     n_point = 2
 
-    if distance_km <= 200 :       # < 100 m
+    if distance_km <= 100 :       # < 100 m
         n_point += 1
-    elif distance_km <= 300:       # < 1 km
-        n_point += 2
-    elif distance_km <= 500:       # < 1 km
-            n_point += 4
-    elif distance_km <= 700:       # < 1 km
-            n_point += 5
-    else:
-        n_point += 5
+    elif distance_km > 100:       # < 1 km
+        n_point += distance_km // km
+   
 
     return n_point
 
