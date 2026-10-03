@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class ShipmentStatus(str, Enum):
     BOOKED = "Booked / Shipment Created"
     AWAITING_PICKUP = "Awaiting Pickup"
+    WAITING_FOR_PICKUP = "Waiting for Pickup"
     PICKED_UP = "Picked Up"
     IN_TRANSIT = "In Transit"
     AT_BORDER = "At Border"
@@ -20,6 +21,7 @@ class ShipmentStatus(str, Enum):
     DELIVERY_ATTEMPTED = "Delivery Attempted"
     DELIVERY_EXCEPTION = "Delivery Exception"
     DELIVERED = "Delivered"
+    PENDING_DELIVERED ="Pending Delivery"
     CANCELLED_RETURNED = "Cancelled / Returned"
 
 

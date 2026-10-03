@@ -238,6 +238,28 @@ def create_delivered_status(
 {latest_updated}
 """
 
+def create_pending_delivery_status(
+    job_number,
+    truck_number,
+    driver_name,
+    route_from,
+    route_to,
+    current_location,
+    latest_updated="The shipment has reached the delivery area and is waiting to be delivered to the customer.",
+    mode="Road Delivery"
+):
+    return f"""*🟡 Shipment Status: Pending Delivery*
+*Job Number:* {job_number}
+*Truck Number:* {truck_number}
+*Driver Name:* {driver_name}
+*Route:* {route_from} → {route_to}
+*Mode:* {mode}
+*Current Location:* {current_location}
+*Latest Update:*
+{latest_updated}
+"""
+
+
 def create_cancelled_returned_status(
     job_number,
     truck_number,
@@ -372,6 +394,30 @@ def create_awaiting_pickup_status(
     mode="Road Trucking"
 ):
     return f"""*⚪ Shipment Status: Awaiting Pickup*
+*Job Number:* {job_number}
+*Truck Number:* {truck_number}
+*Driver Name:* {driver_name}
+*Route:* {route_from} → {route_to}
+*Mode:* {mode}
+*Current Location:*  {current_location}
+*Estimated Pickup:* {estimated_pickup}
+*Latest Update:*
+{latest_updated}
+"""
+
+
+def create_waiting_for_pickup_status(
+    job_number,
+    truck_number,
+    driver_name,
+    route_from,
+    route_to,
+    current_location,
+    latest_updated="The shipment is ready for pickup and is currently waiting for the assigned driver to collect it. The shipment will move to the next location after pickup.",
+    estimated_pickup="Today",
+    mode="Road Trucking"
+):
+    return f"""*⚪ Shipment Status: Waiting for Pickup*
 *Job Number:* {job_number}
 *Truck Number:* {truck_number}
 *Driver Name:* {driver_name}

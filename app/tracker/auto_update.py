@@ -48,6 +48,8 @@ STATUS_FUNCTIONS = {
     ShipmentStatus.DELIVERY_EXCEPTION.value: create_delivery_exception_status,
     ShipmentStatus.DELIVERED.value: create_delivered_status,
     ShipmentStatus.CANCELLED_RETURNED.value: create_cancelled_returned_status,
+    ShipmentStatus.WAITING_FOR_PICKUP.value: create_waiting_for_pickup_status,
+    ShipmentStatus.PENDING_DELIVERED.value:create_pending_delivery_status,
 }
 
 

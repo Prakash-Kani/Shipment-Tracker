@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 # from .endpoints import auth, users, admin,  menu_permissions, menus,  button_permissions, buttons, roles, user_management, impersonate
-from .endpoints import tracker, tracker_twilio
+from .endpoints import tracker, tracker_twilio, tracker_v2
 # # EXAM CRUD
 # from .endpoints import subjects, exam_sesssion, paper, mcq_question, mcq_answer, mock, evaluate
 
@@ -22,8 +22,9 @@ api_router = APIRouter()  # Main V1 router
 
 # api_router.include_router(generate_stream.router, prefix="/generate/stream", tags=["generate Descriptions"])
 api_router.include_router(tracker.router, prefix="/whatsapp", tags=["Whatsapp Webhook"])
+api_router.include_router(tracker_v2.router, prefix="/v2/whatsapp", tags=["Whatsapp Webhook V2"])
 
-api_router.include_router(tracker_twilio.router, prefix="/twilio", tags=["Whatsapp Webhook"])
+api_router.include_router(tracker_twilio.router, prefix="/twilio", tags=["Whatsapp Webhook Twilio"])
 
 # Export for parent import
 __all__ = ["api_router"]

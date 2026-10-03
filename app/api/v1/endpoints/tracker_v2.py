@@ -8,7 +8,7 @@ from app.tracker.auto_update import  send_status_message, handle_workflow_transi
 from app.schemas.tracker import *
 from app.tracker.messanger import send_whatsapp_message
 from app.tracker.direct_chat import process_shipment_bot
-from app.tracker.auto_distance_update import (
+from app.tracker.auto_distance_update_v2 import (
     DistanceTrackingRequest,
     RouteMilestoneRequest,
     ManualAdvanceRequest,
@@ -340,26 +340,54 @@ async def create_in_transit_status_endpoint(
 
 @router.post("/distance-tracking/start")
 async def start(payload: DistanceTrackingRequest):
+    """
+    Starts (or restarts) distance-based tracking for ONE (truck_number,
+    job_number) pair. A truck can have more than one job tracked at the
+    same time - starting a new job_number for a truck that already has a
+    DIFFERENT job running does not touch that other job; only calling this
+    again with the SAME truck_number + job_number restarts that one job.
+    """
     return await start_distance_tracking(payload)
 
+
 @router.get("/distance-tracking/{truck_number}")
-async def state(truck_number: str):
-    return get_distance_tracking_state(truck_number)
+async def state(truck_number: str, job_number: Optional[str] = Query(default=None)):
+    """
+    With ?job_number=...: that one job's tracking snapshot (404-shaped None
+    if nothing is tracked under that truck+job).
+    Without it: every job currently tracked for this truck, as
+    {job_number: snapshot} - useful when you just want "what is this truck
+    doing right now" without already knowing which job.
+    """
+    result = get_distance_tracking_state(truck_number, job_number)
+    if job_number is not None and result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No tracker for truck_number={truck_number!r} job_number={job_number!r}.",
+        )
+    return result
+
 
 @router.post("/distance-tracking/{truck_number}/status")
-async def manual_status(truck_number: str, status: ShipmentStatus):
-    await handle_distance_workflow_transition(truck_number, status)
+async def manual_status(truck_number: str, status: ShipmentStatus, job_number: str = Query(...)):
+    await handle_distance_workflow_transition(truck_number, job_number, status)
     return {"ok": True}
+
 
 @router.delete("/distance-tracking/{truck_number}")
-async def stop(truck_number: str):
-    await stop_distance_tracking(truck_number)
+async def stop(truck_number: str, job_number: str = Query(...)):
+    await stop_distance_tracking(truck_number, job_number)
     return {"ok": True}
-
 
 
 @router.post("/milestones/build")
 async def build_milestones_route(payload: RouteMilestoneRequest):
+    """
+    Single-pickup/single-delivery route + border-checkpoint preview. For
+    multiple pickup/delivery points, call /distance-tracking/start with
+    pickup_points/delivery_points instead - it builds and starts tracking
+    on the full multi-stop route in one step.
+    """
     try:
         return await build_route_milestones(payload)
     except Exception as e:
@@ -369,6 +397,11 @@ async def build_milestones_route(payload: RouteMilestoneRequest):
             detail=str(e),
         )
 
+
 @router.post("/distance-tracking/{truck_number}/advance")
-async def advance(truck_number: str, payload: ManualAdvanceRequest = ManualAdvanceRequest()):
-    return await advance_milestone_manually(truck_number, payload)
+async def advance(
+    truck_number: str,
+    job_number: str = Query(...),
+    payload: ManualAdvanceRequest = ManualAdvanceRequest(),
+):
+    return await advance_milestone_manually(truck_number, job_number, payload)
