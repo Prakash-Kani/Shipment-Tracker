@@ -16,6 +16,7 @@ class ShipmentStatus(str, Enum):
     VEHICLE_BREAKDOWN = "Vehicle Breakdown"
     WEATHER_ROAD_DELAY = "Weather/Road Delay"
     ARRIVED_AT_DESTINATION_HUB = "Arrived at Destination Hub"
+    ARRIVED_AT_PICKUP_HUB = "Arrived at Pickup Hub"
     ARRIVED_AT_DELIVERY_HUB = "Arrived at Delivery Hub"
     OUT_FOR_DELIVERY = "Out for Delivery"
     DELIVERY_ATTEMPTED = "Delivery Attempted"

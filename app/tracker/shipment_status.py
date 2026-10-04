@@ -502,6 +502,30 @@ def create_delivery_exception_status(
 """
 
 
+def create_arrived_pickup_hub_status(
+    job_number,
+    truck_number,
+    driver_name,
+    route_from,
+    route_to,
+    current_location,
+    latest_updated="Shipment has arrived at the pickup hub and is being processed for pickup.",
+    estimated_arrival="Today",
+    mode="Local Pickup"
+):
+    return f"""*🟢 Shipment Status: Arrived at Pickup Hub*
+*Job Number:* {job_number}
+*Truck Number:* {truck_number}
+*Driver Name:* {driver_name}
+*Route:* {route_from} → {route_to}
+*Mode:* {mode}
+*Current Location:*  {current_location}
+*Estimated Pickup:*  {estimated_arrival}
+*Latest Update:*
+{latest_updated}
+"""
+
+
 def create_arrived_delivery_hub_status(
     job_number,
     truck_number,

@@ -20,7 +20,7 @@ from app.tracker.messanger import send_whatsapp_message
 # from app.tracker.auto_update import STATUS_FUNCTIONS, EXCEPTION_STATUSES
 
 # >>> ADJUST THIS IMPORT PATH to wherever these two existing helpers live <<<
-from app.tracker.distance_v2 import calculate_driving_distance, calculate_distance, build_multi_point_route
+from app.tracker.distance import calculate_driving_distance, calculate_distance, build_multi_point_route
 
 
 
@@ -37,6 +37,7 @@ STATUS_FUNCTIONS = {
     ShipmentStatus.VEHICLE_BREAKDOWN.value: create_truck_breakdown_status,
     ShipmentStatus.WEATHER_ROAD_DELAY.value: create_weather_delay_status,
     ShipmentStatus.ARRIVED_AT_DESTINATION_HUB.value: create_arrived_destination_hub_status,
+    ShipmentStatus.ARRIVED_AT_PICKUP_HUB.value: create_arrived_pickup_hub_status,
     ShipmentStatus.ARRIVED_AT_DELIVERY_HUB.value: create_arrived_delivery_hub_status,
     ShipmentStatus.OUT_FOR_DELIVERY.value: create_out_for_delivery_status,
     ShipmentStatus.DELIVERY_ATTEMPTED.value: create_delivery_attempted_status,
@@ -126,7 +127,13 @@ class DistanceTrackingConfig:
     move_min_displacement_m: float = 200.0  # OR moved >= this since last fix
 
     # ---- Pickup confirmation ----
-    pickup_min_dwell_seconds: int = 60 * 5        # must be seen stationary first
+    # Stage 1 (Arrived at Pickup Hub) fires as soon as the truck enters the
+    # pickup milestone's arrival radius - see arrival_radius_m["pickup"].
+    # Stage 2 (Waiting for Pickup) fires once the truck has then been seen
+    # stationary at the hub for this long.
+    pickup_min_dwell_seconds: int = 10 * 60       # must be seen stationary this long
+    # Stage 3 (Picked Up / In Transit) fires once the truck then moves
+    # continuously for this long, confirming it actually left with the load.
     pickup_move_confirm_seconds: int = 10 * 60    # continuous movement required
     pickup_move_grace_seconds: int = 60           # short stop (gate/traffic) tolerated
 
@@ -964,10 +971,13 @@ class DistanceTrackingState:
         self.last_reading: Optional[GPSReading] = None
         self.stale_readings = 0
 
-        # pickup validation (first pickup only)
+        # pickup validation (first pickup only): Arrived at Pickup Hub (on
+        # radius entry) -> Waiting for Pickup (after pickup_min_dwell_seconds
+        # stationary) -> Picked Up / In Transit (after continuous movement).
         self.pickup_stationary_since: Optional[datetime] = None
         self.movement_started_at: Optional[datetime] = None
         self.last_moving_at: Optional[datetime] = None
+        self.waiting_for_pickup_sent = start > 0
         self.picked_up_sent = start > 0
 
         # delivery validation (final delivery only)
@@ -1146,10 +1156,15 @@ def _complete(t: DistanceTrackingState, ms: Milestone, now: datetime, skipped: b
 
 async def _validate_pickup(t, ms, reading, moving, now) -> bool:
     """
-    Pickup is confirmed only when:
-      1. the truck was seen stationary at pickup (for a minimum dwell), and
-      2. it then moves continuously for 5 minutes.
-    A short stop (gate / traffic light) inside that window is tolerated.
+    Pickup is a three-stage sequence:
+      1. Arrived at Pickup Hub - already fired (in _evaluate_milestone's
+         ARRIVED branch) the moment the truck entered the pickup radius.
+      2. Waiting for Pickup - fired here once the truck has been seen
+         stationary at the hub for CFG.pickup_min_dwell_seconds (10 min).
+      3. Picked Up / In Transit - fired once it then moves continuously for
+         CFG.pickup_move_confirm_seconds, confirming an actual departure
+         rather than a brief manoeuvre. A short stop (gate / traffic light)
+         inside that window is tolerated via CFG.pickup_move_grace_seconds.
     """
     # 1) wait for the truck to stop at pickup
     if t.pickup_stationary_since is None:
@@ -1162,7 +1177,12 @@ async def _validate_pickup(t, ms, reading, moving, now) -> bool:
     if dwell < CFG.pickup_min_dwell_seconds:
         if moving:                       # just a blip / still manoeuvring
             t.pickup_stationary_since = None
+            t.waiting_for_pickup_sent = False
         return False
+
+    if not t.waiting_for_pickup_sent:
+        await emit_status(t, ShipmentStatus.WAITING_FOR_PICKUP, reading)
+        t.waiting_for_pickup_sent = True
 
     # 2) continuous movement
     if moving:
@@ -1179,7 +1199,7 @@ async def _validate_pickup(t, ms, reading, moving, now) -> bool:
     if (now - t.movement_started_at).total_seconds() < CFG.pickup_move_confirm_seconds:
         return False
 
-    # Confirmed: Awaiting Pickup -> Picked Up -> In Transit
+    # Confirmed: Waiting for Pickup -> Picked Up -> In Transit
     if not t.picked_up_sent:
         await emit_status(t, ShipmentStatus.PICKED_UP, reading)
         t.picked_up_sent = True
@@ -1250,9 +1270,12 @@ async def _evaluate_milestone(t, ms, dist_km, reading, moving, now) -> bool:
             return True
 
         if ms.type == "pickup":
+            if t.shipment_status != ShipmentStatus.ARRIVED_AT_PICKUP_HUB:
+                await emit_status(t, ShipmentStatus.ARRIVED_AT_PICKUP_HUB, reading)
             t.pickup_stationary_since = None
             t.movement_started_at = None
             t.last_moving_at = None
+            t.waiting_for_pickup_sent = False
             ms.state = MilestoneState.VALIDATING
 
         elif ms.type == "delivery":
@@ -1534,10 +1557,10 @@ async def _handle_route_deviation(t: DistanceTrackingState) -> None:
 async def process_gps_update(t: DistanceTrackingState) -> int:
     """Runs one full cycle and returns the number of seconds until the next GPS check."""
 
-    # Shipment was created manually as BOOKED -> now enters pickup monitoring
-    if t.shipment_status == ShipmentStatus.BOOKED:
-        await emit_status(t, ShipmentStatus.WAITING_FOR_PICKUP, None)
-
+    # Shipment stays BOOKED (silently) until the truck actually reaches the
+    # pickup hub - no status is sent just for the job starting. The first
+    # message in the pickup sequence is "Arrived at Pickup Hub", fired by
+    # _evaluate_milestone() once the truck enters the pickup radius.
     reading = await gps_session.get_truck_reading(t.truck_number)
     now = _now()
     t.last_gps_check = now
@@ -1868,12 +1891,10 @@ async def start_distance_tracking(payload: DistanceTrackingRequest) -> dict:
             existing.task.cancel()
         distance_trackers[key] = tracker
 
-    # Send "Awaiting Pickup" synchronously (not on the first GPS tick) so it is
-    # guaranteed to have gone out before this call returns - important for
-    # manual/advance-by-curl flows that may call /advance immediately after.
-    if tracker.shipment_status == ShipmentStatus.BOOKED:
-        await emit_status(tracker, ShipmentStatus.WAITING_FOR_PICKUP, None)
-
+    # Shipment stays BOOKED (silently) until the truck is actually within
+    # the pickup radius - the pickup sequence is Arrived at Pickup Hub ->
+    # Waiting for Pickup -> Picked Up / In Transit, and none of those fire
+    # just because the job was started.
     tracker.task = asyncio.create_task(run_distance_tracking(tracker))
     _log(tracker, f"Tracking started ({len(milestones)} milestone(s)).")
     return tracker.to_dict()
@@ -1938,14 +1959,17 @@ async def advance_milestone_manually(truck_number: str, job_number: str, payload
     sends its status message (DB save + WhatsApp), without waiting for GPS.
     Each call moves the shipment forward by exactly one step:
 
-        Awaiting Pickup -> [call] -> Picked Up + In Transit
+        Booked -> [call] -> Arrived at Pickup Hub
+        Arrived at Pickup Hub -> [call] -> Waiting for Pickup
+        Waiting for Pickup -> [call] -> Picked Up + In Transit
         (pickup_stop / transit / border / customs / delivery_stop milestone)
             -> [call] -> that milestone's status, next becomes active
         Arrived-at-delivery step -> [call] -> Arrived at Delivery Hub
         Arrived at Delivery Hub -> [call] -> Delivered (shipment finishes)
 
-    Delivery is two calls (arrival, then completion) because those are two
-    distinct business events in the spec; every other milestone is one call.
+    Pickup is three calls (arrived, waiting, then completion) and delivery
+    is two (arrival, then completion), because those are the distinct
+    business events in the spec; every other milestone is one call.
     Pauses/stops GPS polling for this truck+job unless resume_gps_tracking=True.
     """
     payload = payload or ManualAdvanceRequest()
@@ -1970,13 +1994,18 @@ async def advance_milestone_manually(truck_number: str, job_number: str, payload
     ms = t.active
 
     if ms.type == "pickup":
-        if not t.picked_up_sent:
-            await emit_status(t, ShipmentStatus.PICKED_UP, None)
-            t.picked_up_sent = True
-        await emit_status(t, ShipmentStatus.IN_TRANSIT, None)
-        ms.arrived_at = ms.arrived_at or now
-        ms.departed_at = now
-        _complete(t, ms, now)
+        if t.shipment_status not in (ShipmentStatus.ARRIVED_AT_PICKUP_HUB, ShipmentStatus.WAITING_FOR_PICKUP):
+            ms.arrived_at = ms.arrived_at or now
+            await emit_status(t, ShipmentStatus.ARRIVED_AT_PICKUP_HUB, None)
+        elif t.shipment_status == ShipmentStatus.ARRIVED_AT_PICKUP_HUB:
+            await emit_status(t, ShipmentStatus.WAITING_FOR_PICKUP, None)
+        else:  # WAITING_FOR_PICKUP
+            if not t.picked_up_sent:
+                await emit_status(t, ShipmentStatus.PICKED_UP, None)
+                t.picked_up_sent = True
+            await emit_status(t, ShipmentStatus.IN_TRANSIT, None)
+            ms.departed_at = now
+            _complete(t, ms, now)
 
     elif ms.type == "delivery":
         if t.shipment_status != ShipmentStatus.ARRIVED_AT_DELIVERY_HUB:

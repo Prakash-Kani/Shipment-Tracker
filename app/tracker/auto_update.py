@@ -42,6 +42,7 @@ STATUS_FUNCTIONS = {
     ShipmentStatus.VEHICLE_BREAKDOWN.value: create_truck_breakdown_status,
     ShipmentStatus.WEATHER_ROAD_DELAY.value: create_weather_delay_status,
     ShipmentStatus.ARRIVED_AT_DESTINATION_HUB.value: create_arrived_destination_hub_status,
+    ShipmentStatus.ARRIVED_AT_PICKUP_HUB.value: create_arrived_pickup_hub_status,
     ShipmentStatus.ARRIVED_AT_DELIVERY_HUB.value: create_arrived_delivery_hub_status,
     ShipmentStatus.OUT_FOR_DELIVERY.value: create_out_for_delivery_status,
     ShipmentStatus.DELIVERY_ATTEMPTED.value: create_delivery_attempted_status,
@@ -49,7 +50,7 @@ STATUS_FUNCTIONS = {
     ShipmentStatus.DELIVERED.value: create_delivered_status,
     ShipmentStatus.CANCELLED_RETURNED.value: create_cancelled_returned_status,
     ShipmentStatus.WAITING_FOR_PICKUP.value: create_waiting_for_pickup_status,
-    ShipmentStatus.PENDING_DELIVERED.value:create_pending_delivery_status,
+    ShipmentStatus.PENDING_DELIVERED.value: create_pending_delivery_status,
 }
 
 
