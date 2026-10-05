@@ -108,8 +108,8 @@ class DistanceTrackingConfig:
         "transit": 500.0,
         "delivery_stop": 500.0,  # an intermediate delivery (multi-delivery shipments)
         "delivery": 500.0,
-        "border": 1000.0,   # crossing zones are bigger than a single GPS point
-        "customs": 1000.0,
+        "border": 500.0,   # crossing zones are bigger than a single GPS point
+        "customs": 500.0,
     })
 
     # ---- Border-checkpoint matching ----
@@ -131,7 +131,7 @@ class DistanceTrackingConfig:
     # pickup milestone's arrival radius - see arrival_radius_m["pickup"].
     # Stage 2 (Waiting for Pickup) fires once the truck has then been seen
     # stationary at the hub for this long.
-    pickup_min_dwell_seconds: int = 10 * 60       # must be seen stationary this long
+    pickup_min_dwell_seconds: int = 5 * 60       # must be seen stationary this long
     # Stage 3 (Picked Up / In Transit) fires once the truck then moves
     # continuously for this long, confirming it actually left with the load.
     pickup_move_confirm_seconds: int = 10 * 60    # continuous movement required
