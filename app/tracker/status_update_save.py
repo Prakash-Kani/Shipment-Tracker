@@ -94,7 +94,7 @@ def update_shipment_status(job_number: str,
     "Accept": "application/json",
 }
 
-    print(payload)
+
     # return payload
     response = requests.post(
         url,

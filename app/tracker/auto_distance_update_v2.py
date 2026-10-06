@@ -9,6 +9,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
+import requests
+
 from app.tracker.shipment_status import *
 from app.schemas.tracker import *
 from app.tracker.gps_tracking import get_car_status, gps_login
@@ -314,17 +317,32 @@ def save_milestone(job_number: str, truck_number: str, milestone_data: dict) -> 
     practice once this is backed by a real store: write new rows, don't
     mutate old ones.
     """
+    
+
+    url = f"{settings.tcard_base_url}Apicard/truck-deviation-tracking"
+
     record = {
         "job_number": job_number,
         "truck_number": truck_number,
         "saved_at": datetime.now(timezone.utc).isoformat(),
         **milestone_data,
     }
+    
     print(
         f"[MILESTONE SAVE] job={job_number} truck={truck_number} "
         f"seq={record.get('sequence')} type={record.get('type')} "
         f"status={record.get('status')} -> {record}"
     )
+    response = requests.post(
+        url,
+        json=record,
+        timeout=60
+    )
+
+    response.raise_for_status()
+    return response.json()
+
+
 
 
 def label_milestone_points(points: List[tuple]) -> List[Tuple[float, float, str]]:
