@@ -350,7 +350,7 @@ async def start(payload: DistanceTrackingRequest):
     return await start_distance_tracking(payload)
 
 
-@router.get("/distance-tracking/{truck_number}")
+@router.get("/distance-tracking")
 async def state(truck_number: str, job_number: Optional[str] = Query(default=None)):
     """
     With ?job_number=...: that one job's tracking snapshot (404-shaped None
@@ -368,13 +368,13 @@ async def state(truck_number: str, job_number: Optional[str] = Query(default=Non
     return result
 
 
-@router.post("/distance-tracking/{truck_number}/status")
+@router.post("/distance-tracking/status")
 async def manual_status(truck_number: str, status: ShipmentStatus, job_number: str = Query(...)):
     await handle_distance_workflow_transition(truck_number, job_number, status)
     return {"ok": True}
 
 
-@router.delete("/distance-tracking/{truck_number}")
+@router.delete("/distance-tracking")
 async def stop(truck_number: str, job_number: str = Query(...)):
     await stop_distance_tracking(truck_number, job_number)
     return {"ok": True}
@@ -398,7 +398,7 @@ async def build_milestones_route(payload: RouteMilestoneRequest):
         )
 
 
-@router.post("/distance-tracking/{truck_number}/advance")
+@router.post("/distance-tracking/advance")
 async def advance(
     truck_number: str,
     job_number: str = Query(...),
