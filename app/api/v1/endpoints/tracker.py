@@ -21,6 +21,7 @@ from app.tracker.auto_distance_update import (
     shutdown_distance_tracking,
     build_route_milestones
 )
+from app.tracker.messanger import save_whatsapp_webhook
 import os
 import json
 from datetime import datetime, timezone
@@ -79,6 +80,8 @@ async def receive_webhook(request: Request):
     
 
     body = await request.json()
+    chat_history = await save_whatsapp_webhook(payload=body)
+    logger.info(f"Webhook history {chat_history}")
 
     timestamp = datetime.now(
                                 ZoneInfo("Asia/Kuala_Lumpur")

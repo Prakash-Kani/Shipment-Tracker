@@ -13,6 +13,25 @@ client = Client(
     twilio_auth_token
 )
 
+async def save_whatsapp_webhook(payload: dict):
+    url = f"{settings.tcard_base_url}/Apicard/whatsapp/webhook"
+    
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            url,
+            json=payload,
+            headers={
+                "Content-Type": "application/json"
+            }
+        )
+
+        response.raise_for_status()
+
+        
+
+        return response.json() if response.content else None
+
 async def send_whatsapp_message1(to: str, message: str):
     # return "please uncomment send whatsapp message function"
 
@@ -71,6 +90,7 @@ async def send_whatsapp_message(to: str, message: str):
                 "body": message
             }
         }
+        chat_history = await save_whatsapp_webhook(payload)
 
         response = requests.post(
             url,
@@ -78,11 +98,15 @@ async def send_whatsapp_message(to: str, message: str):
             json=payload,
             timeout=30
         )
+        chat_response = response.json()
+        chat_response["messages"][0]["message_id"] = chat_history['record']['wamid']
+
+        chat_history = await save_whatsapp_webhook(chat_response)
 
         results.append({
             "phone_number": phone_number,
             "status_code": response.status_code,
-            "response": response.json()
+            "response": chat_response
         })
 
     return results
@@ -345,6 +369,9 @@ async def send_whatsapp_interactive(
         "interactive": interactive
     }
 
+    chat_history = await save_whatsapp_webhook(payload)
+    print('chat_history', chat_history)
+
     # --------------------------------------------------
     # LOG
     # --------------------------------------------------
@@ -367,6 +394,11 @@ async def send_whatsapp_interactive(
             headers=headers,
             json=payload
         )
+        chat_response = response.json()
+        chat_response["messages"][0]["message_id"] = chat_history['record']['wamid']
+
+        chat_history = await save_whatsapp_webhook(chat_response)
+        
 
     print("\nWhatsApp API response:")
     print("Status:", response.status_code)
