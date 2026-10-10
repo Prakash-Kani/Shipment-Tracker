@@ -9,9 +9,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.config import settings
-import requests
-
 from app.tracker.shipment_status import *
 from app.schemas.tracker import *
 from app.tracker.gps_tracking import get_car_status, gps_login
@@ -111,8 +108,8 @@ class DistanceTrackingConfig:
         "transit": 500.0,
         "delivery_stop": 500.0,  # an intermediate delivery (multi-delivery shipments)
         "delivery": 500.0,
-        "border": 500.0,   # crossing zones are bigger than a single GPS point
-        "customs": 500.0,
+        "border": 1000.0,   # crossing zones are bigger than a single GPS point
+        "customs": 1000.0,
     })
 
     # ---- Border-checkpoint matching ----
@@ -134,7 +131,7 @@ class DistanceTrackingConfig:
     # pickup milestone's arrival radius - see arrival_radius_m["pickup"].
     # Stage 2 (Waiting for Pickup) fires once the truck has then been seen
     # stationary at the hub for this long.
-    pickup_min_dwell_seconds: int = 5 * 60       # must be seen stationary this long
+    pickup_min_dwell_seconds: int = 10 * 60       # must be seen stationary this long
     # Stage 3 (Picked Up / In Transit) fires once the truck then moves
     # continuously for this long, confirming it actually left with the load.
     pickup_move_confirm_seconds: int = 10 * 60    # continuous movement required
@@ -317,32 +314,17 @@ def save_milestone(job_number: str, truck_number: str, milestone_data: dict) -> 
     practice once this is backed by a real store: write new rows, don't
     mutate old ones.
     """
-    
-
-    url = f"{settings.tcard_base_url}Apicard/truck-deviation-tracking"
-
     record = {
         "job_number": job_number,
         "truck_number": truck_number,
         "saved_at": datetime.now(timezone.utc).isoformat(),
         **milestone_data,
     }
-    
     print(
         f"[MILESTONE SAVE] job={job_number} truck={truck_number} "
         f"seq={record.get('sequence')} type={record.get('type')} "
         f"status={record.get('status')} -> {record}"
     )
-    response = requests.post(
-        url,
-        json=record,
-        timeout=60
-    )
-
-    response.raise_for_status()
-    return response.json()
-
-
 
 
 def label_milestone_points(points: List[tuple]) -> List[Tuple[float, float, str]]:
@@ -1920,19 +1902,35 @@ async def start_distance_tracking(payload: DistanceTrackingRequest) -> dict:
 
 async def handle_distance_workflow_transition(truck_number: str, job_number: str, status: ShipmentStatus):
     """
-    Same idea as handle_workflow_transition() in auto_update.py, for manual
-    status changes made while a (truck, job) pair is being distance-tracked:
+    Manual status change for a (truck, job) pair that is being
+    distance-tracked - e.g. an operator marking it Delayed, Customs Hold,
+    Vehicle Breakdown, or Weather/Road Delay.
+
+    Unlike handle_workflow_transition() in auto_update.py - which only does
+    bookkeeping, because its caller (the /status/update router) always
+    calls send_status_message() separately first - THIS function also sends
+    the status message itself. The distance-tracking router's manual
+    /status endpoint has no separate call for that, so calling this IS the
+    whole point: it both emits the message (DB save + WhatsApp) AND applies
+    the matching bookkeeping:
 
       - exception status (Delayed / Customs Hold / Breakdown / Weather) -> pause
       - Delivered / Cancelled-Returned                                  -> stop for good
       - any other manual status while paused (issue resolved)           -> resume
+      - any other manual status while NOT paused                        -> message sent, no bookkeeping change
     """
     key = _tracker_key(truck_number, job_number)
     async with distance_trackers_lock:
         existing = distance_trackers.get(key)
-        if not existing:
-            return
+    if not existing:
+        return
 
+    # Always send the message for the status that was actually requested -
+    # this is a manual override, so nothing else in the pipeline will emit
+    # it. (emit_status also updates existing.shipment_status.)
+    await emit_status(existing, status, None)
+
+    async with distance_trackers_lock:
         if status in EXCEPTION_STATUSES:
             existing.paused = True
             if existing.task:
@@ -1948,7 +1946,6 @@ async def handle_distance_workflow_transition(truck_number: str, job_number: str
 
         elif existing.paused:
             existing.paused = False
-            existing.shipment_status = status
             existing.next_gps_check = _now()
             existing.task = asyncio.create_task(run_distance_tracking(existing))
 
