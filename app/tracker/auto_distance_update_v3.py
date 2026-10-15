@@ -178,6 +178,9 @@ class DistanceTrackingConfig:
 
     default_whatsapp_number: str = "918281993386"
 
+    # Gap between "Picked Up" and "In Transit" messages
+    picked_up_to_in_transit_delay_seconds: int = 60
+
 
 CFG = DistanceTrackingConfig()
 
@@ -1277,19 +1280,7 @@ async def _validate_pickup(t, ms, reading, moving, now) -> bool:
     ms.departed_at = t.movement_started_at
     _complete(t, ms, now)
     return True
-    if not t.picked_up_sent:
-        await emit_status(t, ShipmentStatus.PICKED_UP, reading)
-        t.picked_up_sent = True
-        # Wait 30 seconds before sending In Transit
-        _log(t, "Picked Up status sent - waiting 30 seconds before In Transit")
-        print(t, "Picked Up status sent - waiting 30 seconds before In Transit")
-        await asyncio.sleep(90)
 
-    await emit_status(t, ShipmentStatus.IN_TRANSIT, reading)
-
-    ms.departed_at = t.movement_started_at
-    _complete(t, ms, now)
-    return True
 
 
 async def _validate_delivery(t, ms, dist_km, reading, now) -> bool:
