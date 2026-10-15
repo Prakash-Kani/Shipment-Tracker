@@ -69,7 +69,7 @@ async def send_whatsapp_message1(to: str, message: str):
     return response
 
 # sends the same message to multiple users
-async def send_whatsapp_message(to: str, message: str):
+async def send_whatsapp_message_old(to: str, message: str):
     # return "please uncomment send whatsapp message function"
     results = []
     url = (
@@ -110,6 +110,65 @@ async def send_whatsapp_message(to: str, message: str):
         })
 
     return results
+
+
+async def send_whatsapp_message(to: str, message: str):
+    # return "please uncomment send whatsapp message function"
+    results = []
+    url = (
+        f"https://graph.facebook.com/v23.0/"
+        f"{PHONE_NUMBER_ID}/messages"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    for phone_number in to.split(','):
+        if isinstance(message, str):
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": phone_number,
+                "type": "text",
+                "text": {
+                    "body": message
+                }
+            }
+        elif isinstance(message, dict):
+            payload = message
+
+            payload['to'] = phone_number
+            
+            for component in payload.get('template', {}).get('components', []):
+                if component.get('type') == 'body':
+                    component['parameters'] = [
+                        parameter
+                        for parameter in component.get('parameters', [])
+                        if parameter.get('parameter_name') != 'latest_updated'
+                    ]
+
+        chat_history = await save_whatsapp_webhook(payload)
+
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        chat_response = response.json()
+        
+        chat_response["messages"][0]["message_id"] = chat_history['record']['wamid']
+
+        chat_history = await save_whatsapp_webhook(chat_response)
+
+        results.append({
+            "phone_number": phone_number,
+            "status_code": response.status_code,
+            "response": chat_response
+        })
+
+    return results
+
 
 
 

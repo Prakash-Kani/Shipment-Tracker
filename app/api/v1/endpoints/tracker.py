@@ -104,6 +104,11 @@ async def receive_webhook(request: Request):
 
                 value = change.get("value", {})
 
+                if 'metadata' in value:
+                
+                    if value['metadata']['phone_number_id'] != settings.phone_number_id:
+                        return Response(status_code=404)
+                
                 messages = value.get("messages", [])
 
                 for message in messages:

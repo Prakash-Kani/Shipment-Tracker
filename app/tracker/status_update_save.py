@@ -66,10 +66,27 @@ def update_shipment_status(job_number: str,
 
     if truck_data:
         truck_data = truck_data[0]
+    # if type(message) == str:
+    #     latest_update = message.split("*Latest Update:*", 1)[1].strip().replace("\n", " ")
+    # elif type(message) == dict:
+    #     print(message)
+    #     latest_update = message['template']['components'][-1]['latest_updated']
+    if isinstance(message, str):
+        latest_update = message.split("*Latest Update:*", 1)[1].strip().replace("\n", " ")
 
-    latest_update = message.split("*Latest Update:*", 1)[1].strip().replace("\n", " ")
+    elif isinstance(message, dict):
+        components = message.get("template", {}).get("components", [])
 
-
+        latest_update = next(
+            (
+                parameter["text"]
+                for component in components
+                if component.get("type") == "body"
+                for parameter in component.get("parameters", [])
+                if parameter.get("parameter_name") == "latest_updated"
+            ),
+            ""
+        )
 
     payload = {
     "main_job_id": truck_data['sub_refer_rtf_id'],
