@@ -1,7 +1,14 @@
+from app.core.config import settings
 
+def add_client_url(job_enc):
+    return f'''
+    
+🚛 *Live Shipment Tracking:*
+{settings.tracking_base_url}{job_enc}'''
 
 def create_common_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -21,11 +28,12 @@ def create_common_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 def create_booked_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -44,12 +52,13 @@ def create_booked_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_at_border_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -68,12 +77,13 @@ def create_at_border_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_in_transit_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -92,11 +102,12 @@ def create_in_transit_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 def create_in_transit_delayed_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -115,12 +126,13 @@ def create_in_transit_delayed_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_customs_clearance_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -139,12 +151,13 @@ def create_customs_clearance_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_customs_hold_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -163,12 +176,13 @@ def create_customs_hold_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_arrived_destination_hub_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -187,12 +201,13 @@ def create_arrived_destination_hub_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_out_for_delivery_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -211,12 +226,13 @@ def create_out_for_delivery_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_delivered_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -235,11 +251,12 @@ def create_delivered_status(
 *Mode:* {mode}
 *Delivered Location:* {current_location}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 def create_pending_delivery_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -256,12 +273,13 @@ def create_pending_delivery_status(
 *Mode:* {mode}
 *Current Location:* {current_location}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_cancelled_returned_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -280,12 +298,13 @@ def create_cancelled_returned_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_truck_breakdown_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -304,12 +323,13 @@ def create_truck_breakdown_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_traffic_road_closure_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -328,12 +348,13 @@ def create_traffic_road_closure_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_weather_delay_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -352,12 +373,13 @@ def create_weather_delay_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_transshipment_status(
     job_number,
+    job_enc,
     previous_truck,
     new_truck,
     driver_name,
@@ -378,12 +400,13 @@ def create_transshipment_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_awaiting_pickup_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -402,12 +425,13 @@ def create_awaiting_pickup_status(
 *Current Location:*  {current_location}
 *Estimated Pickup:* {estimated_pickup}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_waiting_for_pickup_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -426,12 +450,13 @@ def create_waiting_for_pickup_status(
 *Current Location:*  {current_location}
 *Estimated Pickup:* {estimated_pickup}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_picked_up_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -450,12 +475,13 @@ def create_picked_up_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_delivery_attempted_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -474,12 +500,13 @@ def create_delivery_attempted_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_delivery_exception_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -498,12 +525,13 @@ def create_delivery_exception_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_arrived_pickup_hub_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -522,12 +550,13 @@ def create_arrived_pickup_hub_status(
 *Current Location:*  {current_location}
 *Estimated Pickup:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_arrived_delivery_hub_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -546,12 +575,13 @@ def create_arrived_delivery_hub_status(
 *Current Location:*  {current_location}
 *Estimated Arrival:*  {estimated_arrival}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 
 
 def create_delivery_completed_status(
     job_number,
+    job_enc,
     truck_number,
     driver_name,
     route_from,
@@ -570,6 +600,6 @@ def create_delivery_completed_status(
 *Delivered Location:* {current_location}
 *Delivery Time:* {delivery_time}
 *Latest Update:*
-{latest_updated}
+{latest_updated}{add_client_url(job_enc)}
 """
 

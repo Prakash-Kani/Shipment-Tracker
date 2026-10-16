@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     gmap_key: str = os.getenv("GMAP_KEY", "")
     
     tcard_base_url: str = os.getenv("TCARD_BASE_URL", "")
+    tracking_base_url: str = os.getenv("TRACKING_BASE_URL", "")
     # admin_api_key: str = os.getenv("admin_api_key", "")
     self_health_url: str = os.getenv("SELF_HEALTH_URL", "")
 

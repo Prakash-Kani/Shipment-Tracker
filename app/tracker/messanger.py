@@ -134,6 +134,9 @@ async def send_whatsapp_message(to: str, message: str):
                     "body": message
                 }
             }
+            # Enable URL preview only when an HTTPS URL exists
+            if "https://" in message.lower():
+                payload["text"]["preview_url"] = True
         elif isinstance(message, dict):
             payload = message
 

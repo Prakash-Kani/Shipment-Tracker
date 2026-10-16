@@ -226,6 +226,7 @@ def build_shipment_status_message(job_number: str, truck_number: str) -> Optiona
             route_from=truck_row["rtf_from"],
             route_to=truck_row["rtf_to"],
             current_location=current_location,
+            job_enc=''
         )
 
     # Fallback for statuses not in STATUS_FUNCTIONS
@@ -240,6 +241,7 @@ def build_shipment_status_message(job_number: str, truck_number: str) -> Optiona
         shipment_status=status_data["status"],
         latest_updated=status_data["remarks"],
         estimated_arrival=status_data["estimated_arrival"],
+        job_enc=''
     )
 
 

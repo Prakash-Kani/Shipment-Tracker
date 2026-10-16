@@ -930,6 +930,7 @@ class DistanceTrackingState:
         self,
         truck_number: str,
         job_number: str,
+        job_enc: str,
         driver_name: str,
         route_from: str,
         route_to: str,
@@ -939,6 +940,7 @@ class DistanceTrackingState:
     ):
         self.truck_number = truck_number
         self.job_number = job_number
+        self.job_enc = job_enc
         self.driver_name = driver_name
         self.route_from = route_from
         self.route_to = route_to
@@ -1101,6 +1103,7 @@ async def emit_status(
         route_from=t.route_from,
         route_to=t.route_to,
         current_location=current_location,
+        job_enc = t.job_enc
     )
 
     update_shipment_status(
@@ -1764,6 +1767,7 @@ class LatLon(BaseModel):
 
 class DistanceTrackingRequest(BaseModel):
     job_number: str
+    job_enc: str
     truck_number: str
     driver_name: str
     route_from: str
@@ -1868,6 +1872,7 @@ async def start_distance_tracking(payload: DistanceTrackingRequest) -> dict:
     tracker = DistanceTrackingState(
         truck_number=payload.truck_number,
         job_number=payload.job_number,
+        job_enc=payload.job_enc,
         driver_name=payload.driver_name,
         route_from=payload.route_from,
         route_to=payload.route_to,
