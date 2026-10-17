@@ -25,7 +25,7 @@ from app.tracker.distance import calculate_driving_distance, calculate_distance,
 
 
 
-STATUS_FUNCTIONS = {
+STATUS_FUNCTIONS1 = {
     ShipmentStatus.BOOKED.value: create_booked_status,
     ShipmentStatus.AWAITING_PICKUP.value: create_awaiting_pickup_status,
     ShipmentStatus.PICKED_UP.value: create_picked_up_status,
@@ -1077,7 +1077,7 @@ def _now() -> datetime:
 
 # ============ Status emission (message + DB save + WhatsApp) ============
 
-async def emit_status(
+async def emit_status_old(
     t: DistanceTrackingState,
     status: ShipmentStatus,
     reading: Optional[GPSReading],
@@ -1129,6 +1129,100 @@ async def emit_status(
         except Exception as exc:
             # The status is already saved; a WhatsApp failure must not cause a re-send loop.
             _log(t, f"WhatsApp send failed (status was saved): {exc}")
+
+
+async def emit_status(
+    t: DistanceTrackingState,
+    status: ShipmentStatus,
+    reading: Optional[GPSReading],
+):
+    """
+    Same building blocks as send_status_message() in auto_update.py
+    (STATUS_FUNCTIONS -> update_shipment_status -> WhatsApp), but it reuses the
+    GPS reading we already fetched instead of calling the GPS API again.
+    """
+    if reading is None:
+        reading = await gps_session.get_truck_reading(t.truck_number)
+
+    if reading is not None:
+        latitude, longitude = reading.latitude, reading.longitude
+        current_location, speed = reading.address, reading.speed
+    else:
+        ms = t.active
+        latitude, longitude = ms.latitude, ms.longitude
+        current_location, speed = "Location unavailable", 0.0
+    
+    # message = STATUS_FUNCTIONS[status](
+    #     job_number=t.job_number,
+    #     truck_number=t.truck_number,
+    #     driver_name=t.driver_name,
+    #     route_from=t.route_from,
+    #     route_to=t.route_to,
+    #     current_location=current_location,
+    #     job_enc = t.job_enc
+    # )
+    message = await get_shipment_status_whatsapp(t, status, current_location)
+
+    update_shipment_status(
+        job_number=t.job_number,
+        truck_number=t.truck_number,
+        shipment_status=status,
+        message=message,
+        longitude=str(longitude),
+        latitude=str(latitude),
+        current_location=current_location,
+        speed=str(round(speed, 2)),
+    )
+    t.shipment_status = status
+    # _log(t, f"Status -> {status.value}")
+
+    # if t.whatsapp:
+    #     try:
+    #         await send_whatsapp_message(
+    #             to=t.reply_number or CFG.default_whatsapp_number, message=message
+    #         )
+    #     except Exception as exc:
+    #         # The status is already saved; a WhatsApp failure must not cause a re-send loop.
+    #         _log(t, f"WhatsApp send failed (status was saved): {exc}")
+
+
+from app.tracker.utils import get_status_function, get_whatsapp_last_24_chat_person
+from app.tracker import shipment_status_v2, shipment_status
+
+async def get_shipment_status_whatsapp(t: DistanceTrackingState,
+                                 status: ShipmentStatus,
+                                 current_location: str):
+
+    session_numbers = await get_whatsapp_last_24_chat_person()
+
+    for phone_number in t.reply_number.split(','):
+
+        if phone_number in session_numbers:
+            STATUS_FUNCTIONS = await get_status_function(shipment_status) # normal message
+        elif phone_number not in session_numbers:
+            STATUS_FUNCTIONS = await get_status_function(shipment_status_v2) # template message
+
+        message = STATUS_FUNCTIONS[status](
+                job_number=t.job_number,
+                truck_number=t.truck_number,
+                driver_name=t.driver_name,
+                route_from=t.route_from,
+                route_to=t.route_to,
+                current_location=current_location,
+                job_enc = t.job_enc
+            )
+        _log(t, f"Status -> {status.value}")
+        if t.whatsapp:
+            try:
+                await send_whatsapp_message(
+                    to=phone_number, message=message
+                )
+            except Exception as exc:
+                # The status is already saved; a WhatsApp failure must not cause a re-send loop.
+                _log(t, f"WhatsApp send failed (status was saved): {exc}")
+
+    return message
+
 
 
 # ============ Motion detection ============
