@@ -1,5 +1,6 @@
 import httpx
 import requests
+import re
 from app.core.config import settings
 from twilio.rest import Client
 
@@ -112,7 +113,125 @@ async def send_whatsapp_message_old(to: str, message: str):
     return results
 
 
-async def send_whatsapp_message(to: str, message: str):
+async def send_whatsapp_message(to: str, message: str, url_ = None):
+    results = []
+
+    url = (
+        f"https://graph.facebook.com/v23.0/"
+        f"{PHONE_NUMBER_ID}/messages"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    for phone_number in to.split(","):
+        phone_number = phone_number.strip()
+
+        if not phone_number:
+            continue
+
+        if isinstance(message, str):
+            # Extract the first HTTPS URL dynamically
+            
+
+            if url_:
+                tracking_url = url_
+                
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": phone_number,
+                    "type": "interactive",
+                    "interactive": {
+                        "type": "cta_url",
+                        "body": {
+                            "text": message
+                        },
+                        "action": {
+                            "name": "cta_url",
+                            "parameters": {
+                                "display_text": (
+                                    "Shipment Tracking"
+                                ),
+                                "url": tracking_url
+                            }
+                        }
+                    }
+                }
+                print("tracking_url", tracking_url)
+
+            else:
+                # No HTTPS URL: send a regular text message
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": phone_number,
+                    "type": "text",
+                    "text": {
+                        "body": message
+                    }
+                }
+
+        elif isinstance(message, dict):
+            # Support existing custom payloads and templates
+            payload = {**message, "to": phone_number}
+
+            for component in payload.get(
+                "template", {}
+            ).get("components", []):
+                if component.get("type") == "body":
+                    component["parameters"] = [
+                        parameter
+                        for parameter in component.get(
+                            "parameters", []
+                        )
+                        if parameter.get("parameter_name")
+                        != "latest_updated"
+                    ]
+
+        else:
+            raise TypeError(
+                "message must be a string or dictionary"
+            )
+
+        # Save outgoing message history
+        # chat_history = await save_whatsapp_webhook(payload)
+
+        # Send message to WhatsApp Cloud API
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+
+        try:
+            chat_response = response.json()
+        except ValueError:
+            chat_response = {
+                "raw_response": response.text
+            }
+
+        # Attach the stored message ID only when available
+        # wamid = chat_history.get("record", {}).get("wamid")
+
+        # if response.ok and wamid and chat_response.get("messages"):
+        #     chat_response["messages"][0]["message_id"] = wamid
+
+        # Save the API response
+        # await save_whatsapp_webhook(chat_response)
+
+        results.append({
+            "phone_number": phone_number,
+            "status_code": response.status_code,
+            "response": chat_response
+        })
+
+    return results
+
+
+async def send_whatsapp_message1(to: str, message: str):
     # return "please uncomment send whatsapp message function"
     results = []
     url = (

@@ -3,6 +3,7 @@ from app.core.config import settings
 def add_client_url(job_enc):
     if not job_enc:
         return ''
+    return ''
     return f'''
 
 🚛 *Live Shipment Tracking:*
