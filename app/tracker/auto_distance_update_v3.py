@@ -642,6 +642,230 @@ def build_milestones_for_route(
     return route_items
 
 
+# ============ Route-position-aware milestone builder (multi pickup / multi delivery) ============
+#
+# The old approach labelled route points purely by INDEX (first N = pickups,
+# last M = deliveries), so every pickup landed at the front and every delivery
+# at the end no matter where it really sits on the road, and border/customs
+# were slotted around them. The functions below instead:
+#
+#   1. order_route_stops()      - decide the visiting order of all pickup and
+#                                 delivery stops (pickups/deliveries can be
+#                                 interleaved by where they lie on the route)
+#   2. the route is calculated for THAT order
+#   3. build_milestones_from_ordered_stops() places every stop, every border /
+#      customs pair and every extra "In Transit" point by its real position
+#      along the route polyline, so the final order is geographically correct.
+
+def order_route_stops(
+    pickups: List[Tuple[float, float]],
+    deliveries: List[Tuple[float, float]],
+    optimize: bool = True,
+) -> List[dict]:
+    """
+    Returns typed stops in the order the truck will visit them.
+
+        first stop                     -> "pickup"        (full validation)
+        any later pickup               -> "pickup_stop"
+        any delivery except the last   -> "delivery_stop"
+        last stop                      -> "delivery"      (full validation)
+
+    optimize=True : the first pickup is the origin and stays first; the
+        furthest delivery from it is the final destination and stays last; every
+        other pickup/delivery is visited nearest-next from the previous stop.
+        So 2 pickups in Singapore + 1 in Kuala Lumpur are visited SG, SG, KL,
+        and a delivery that lies between pickup #2 and pickup #3 is placed
+        between them.
+    optimize=False: pickups first then deliveries, exactly as supplied.
+    """
+    if not pickups or not deliveries:
+        raise ValueError("At least one pickup and one delivery point are required.")
+
+    stops = (
+        [{"latitude": float(a), "longitude": float(b), "role": "pickup", "_i": i}
+         for i, (a, b) in enumerate(pickups)]
+        + [{"latitude": float(a), "longitude": float(b), "role": "delivery", "_i": len(pickups) + j}
+           for j, (a, b) in enumerate(deliveries)]
+    )
+
+    if optimize and len(stops) > 2:
+        origin = stops[0]
+        for st in stops:
+            st["_d"] = _distance_km(origin["latitude"], origin["longitude"], st["latitude"], st["longitude"])
+
+        # Final destination = the delivery furthest from the origin.
+        delivery_stops = [st for st in stops if st["role"] == "delivery"]
+        final = max(delivery_stops, key=lambda st: (round(st["_d"], 3), st["_i"]))
+
+        # Everything else: always drive to the NEAREST remaining stop next
+        # (works for L-shaped corridors such as SG -> KL -> Kemaman, where a
+        # plain "distance from origin" sort would visit Kuantan before KL).
+        remaining = [st for st in stops[1:] if st is not final]
+        chain, current = [], origin
+        while remaining:
+            nxt = min(
+                remaining,
+                key=lambda st: (
+                    round(_distance_km(current["latitude"], current["longitude"], st["latitude"], st["longitude"]), 3),
+                    st["_i"],
+                ),
+            )
+            chain.append(nxt)
+            remaining.remove(nxt)
+            current = nxt
+        stops = [origin] + chain + [final]
+
+    last_delivery_idx = max(i for i, st in enumerate(stops) if st["role"] == "delivery")
+    # Every pickup must happen before the final delivery.
+    if last_delivery_idx != len(stops) - 1:
+        tail = stops[last_delivery_idx + 1:]
+        stops = stops[:last_delivery_idx] + tail + [stops[last_delivery_idx]]
+
+    last = len(stops) - 1
+    typed = []
+    for i, st in enumerate(stops):
+        if i == last:
+            m_type = "delivery"
+        elif st["role"] == "pickup":
+            m_type = "pickup" if i == 0 else "pickup_stop"
+        else:
+            m_type = "delivery_stop"
+        typed.append({
+            "latitude": st["latitude"], "longitude": st["longitude"], "type": m_type,
+            "shipment_status": MILESTONE_EVENT_LABEL[m_type],
+        })
+    return typed
+
+
+def _polyline_cum_km(polyline: List[tuple]) -> List[float]:
+    cum = [0.0]
+    for a, b in zip(polyline, polyline[1:]):
+        cum.append(cum[-1] + _distance_km(float(a[0]), float(a[1]), float(b[0]), float(b[1])))
+    return cum
+
+
+def _pos_to_km(cum: List[float], pos: float) -> float:
+    i = int(pos)
+    if i >= len(cum) - 1:
+        return cum[-1]
+    return cum[i] + (pos - i) * (cum[i + 1] - cum[i])
+
+
+def _km_to_latlon(polyline: List[tuple], cum: List[float], km: float) -> Tuple[float, float]:
+    import bisect
+    km = max(0.0, min(km, cum[-1]))
+    i = min(max(bisect.bisect_right(cum, km) - 1, 0), len(polyline) - 2)
+    seg = cum[i + 1] - cum[i]
+    f = 0.0 if seg <= 0 else (km - cum[i]) / seg
+    a, b = polyline[i], polyline[i + 1]
+    return (
+        float(a[0]) + f * (float(b[0]) - float(a[0])),
+        float(a[1]) + f * (float(b[1]) - float(a[1])),
+    )
+
+
+def _nearest_position_forward(polyline: List[tuple], lat: float, lon: float, start_pos: float) -> float:
+    """Closest route position to (lat, lon) that is NOT before start_pos - keeps stops in travel order."""
+    n = len(polyline)
+    if n < 2:
+        return 0.0
+    best_pos, best_d = start_pos, float("inf")
+    for i in range(min(int(start_pos), n - 2), n - 1):
+        a, b = polyline[i], polyline[i + 1]
+        d, t = _point_to_segment((lat, lon), (float(a[0]), float(a[1])), (float(b[0]), float(b[1])))
+        if d < best_d:
+            best_d, best_pos = d, max(i + t, start_pos)
+    return best_pos
+
+
+def build_milestones_from_ordered_stops(
+    stops: List[dict],
+    route_polyline: Optional[List[tuple]],
+    spacing_km: float,
+    include_border_checkpoints: bool = True,
+    checkpoints: Dict[str, List[Tuple[float, float]]] = None,
+    radius_km: float = None,
+) -> List[dict]:
+    """
+    `stops` = typed stops in visiting order (see order_route_stops()); the
+    first and last stay first and last. Returns the full milestone list with:
+      - every stop at its real position along the route,
+      - "At Border" / "Customs Clearance" pairs between the stops they
+        actually fall between (e.g. SG pickup, SG pickup, border, customs, KL pickup),
+      - "In Transit" milestones added wherever two consecutive milestones are
+        more than `spacing_km` apart (pickup -> pickup_stop, stop -> border,
+        stop -> delivery_stop, ... any pair).
+    """
+    import math
+
+    if len(stops) < 2:
+        raise ValueError("At least two stops (start and end) are required.")
+
+    polyline = [(float(p[0]), float(p[1])) for p in (route_polyline or [])]
+    if len(polyline) < 2:  # no road geometry -> straight lines between the stops
+        polyline = [(st["latitude"], st["longitude"]) for st in stops]
+    cum = _polyline_cum_km(polyline)
+
+    # 1) position of every stop along the route (never going backwards)
+    pos = 0.0
+    entries = []
+    for i, st in enumerate(stops):
+        if i == 0:
+            pos = 0.0
+        elif i == len(stops) - 1:
+            pos = float(len(polyline) - 1)
+        else:
+            pos = _nearest_position_forward(polyline, st["latitude"], st["longitude"], pos)
+        item = dict(st)
+        item.pop("route_index", None)
+        entries.append((pos, 0, i, item))
+
+    first, last = entries[0], entries[-1]
+    middle = entries[1:-1]
+
+    # 2) border / customs pairs the route actually crosses, by route position
+    if include_border_checkpoints:
+        for k, m in enumerate(match_checkpoints_to_route(polyline, checkpoints, radius_km)):
+            for kind, key, order in (("border", "at_border", 1), ("customs", "customs_clearance", 2)):
+                middle.append((m[key]["route_index"], order, k, {
+                    "latitude": m[key]["latitude"], "longitude": m[key]["longitude"],
+                    "type": kind, "shipment_status": MILESTONE_EVENT_LABEL[kind],
+                    "checkpoint": m["checkpoint"],
+                }))
+
+    middle.sort(key=lambda e: (e[0], e[1], e[2]))
+    ordered = [first] + middle + [last]
+
+    # 3) "In Transit" milestones for long gaps
+    result: List[dict] = []
+    prev_km = None
+    prev_item = None
+    for e_pos, _, _, item in ordered:
+        km = _pos_to_km(cum, e_pos)
+        if prev_item is not None and spacing_km and spacing_km > 0:
+            gap = km - prev_km
+            same_checkpoint = prev_item["type"] == "border" and item["type"] == "customs"
+            if gap > spacing_km and not same_checkpoint:
+                n_extra = math.ceil(gap / spacing_km) - 1
+                step = gap / (n_extra + 1)
+                for j in range(1, n_extra + 1):
+                    lat, lon = _km_to_latlon(polyline, cum, prev_km + j * step)
+                    result.append({
+                        "latitude": lat, "longitude": lon, "type": "transit",
+                        "shipment_status": MILESTONE_EVENT_LABEL["transit"],
+                    })
+        result.append(item)
+        prev_km, prev_item = km, item
+
+    for i, item in enumerate(result):
+        item["sequence"] = i + 1
+        item.setdefault("status", "PENDING")
+        item.setdefault("arrived_at", None)
+        item.setdefault("departed_at", None)
+        item.setdefault("completed_at", None)
+    return result
+
+
 def _tail_route_items(points: List[Any], delivery_stop_coords: Set[Tuple[float, float]]) -> List[dict]:
     """
     Types a RECALCULATED route used after a route-deviation: points[0] is
@@ -2037,6 +2261,12 @@ class DistanceTrackingRequest(BaseModel):
     # checkpoints such as customs clearance are inserted automatically. Set to
     # False to get plain pickup/transit/delivery milestones instead.
     include_border_checkpoints: bool = True
+    # Multi pickup / multi delivery: True (default) = the system decides the
+    # visiting order of the stops by their position along the route (pickups
+    # and deliveries can be interleaved; border/customs and long gaps are
+    # filled in accordingly). False = visit pickup_points in the order given,
+    # then delivery_points in the order given.
+    optimize_stop_order: bool = True
 
     # Optional: supply milestones yourself instead of routing. Either
     #   - [lat, lon, label] tuples, or
@@ -2084,7 +2314,12 @@ async def start_distance_tracking(payload: DistanceTrackingRequest) -> dict:
             )
 
         spacing_km = payload.milestone_spacing_km or CFG.default_milestone_spacing_km
-        all_points = pickup_list + delivery_list
+
+        # Decide the visiting order FIRST, then route in that order, so the
+        # route (and therefore the border/customs crossings and transit
+        # points) matches the order the truck will really drive.
+        typed_stops = order_route_stops(pickup_list, delivery_list, payload.optimize_stop_order)
+        all_points = [(st["latitude"], st["longitude"]) for st in typed_stops]
 
         route = await asyncio.to_thread(build_multi_point_route, all_points, spacing_km)
         if not route or not route.get("success"):
@@ -2093,13 +2328,15 @@ async def start_distance_tracking(payload: DistanceTrackingRequest) -> dict:
                 detail=route.get("message", "Could not calculate the route/milestones.") if route else "Could not calculate the route/milestones.",
             )
 
-        points = build_milestones_for_route(
-            route["milestone_points"],
-            pickup_count=len(pickup_list),
-            delivery_count=len(delivery_list),
-            route_polyline=route.get("route_polylines"),
-            include_border_checkpoints=payload.include_border_checkpoints,
-        )
+        try:
+            points = build_milestones_from_ordered_stops(
+                typed_stops,
+                route.get("route_polylines"),
+                spacing_km,
+                include_border_checkpoints=payload.include_border_checkpoints,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
     try:
         milestones = build_milestones(points)
@@ -2143,6 +2380,41 @@ async def start_distance_tracking(payload: DistanceTrackingRequest) -> dict:
     return tracker.to_dict()
 
 
+async def _assert_truck_at_pickup(t: "DistanceTrackingState") -> None:
+    """
+    Guard for "Arrived at Pickup Hub": the status may only be sent when the
+    truck's LIVE GPS position is inside the active pickup milestone's arrival
+    radius. Raises HTTPException(409) otherwise, BEFORE anything is emitted or
+    any tracker state is changed.
+    """
+    ms = t.active
+    if ms.type not in ("pickup", "pickup_stop"):
+        return
+
+    reading = await gps_session.get_truck_reading(t.truck_number)
+    if reading is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot verify truck location (no GPS fix) - 'Arrived at Pickup Hub' not sent.",
+        )
+
+    dist_km = _distance_km(reading.latitude, reading.longitude, ms.latitude, ms.longitude)
+    radius_km = CFG.arrival_radius_m[ms.type] / 1000
+    if dist_km > radius_km:
+        _log(
+            t,
+            f"Arrived at Pickup Hub rejected - truck is {dist_km:.2f} km from "
+            f"pickup #{ms.sequence} (radius {radius_km * 1000:.0f} m)",
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Truck is {dist_km:.2f} km away from pickup milestone #{ms.sequence}; "
+                f"'Arrived at Pickup Hub' is only sent within {radius_km * 1000:.0f} m."
+            ),
+        )
+
+
 async def handle_distance_workflow_transition(truck_number: str, job_number: str, status: ShipmentStatus):
     """
     Manual status change for a (truck, job) pair that is being
@@ -2167,6 +2439,10 @@ async def handle_distance_workflow_transition(truck_number: str, job_number: str
         existing = distance_trackers.get(key)
     if not existing:
         return
+
+    # "Arrived at Pickup Hub" must never be sent unless the truck is really there.
+    if status == ShipmentStatus.ARRIVED_AT_PICKUP_HUB:
+        await _assert_truck_at_pickup(existing)
 
     # Always send the message for the status that was actually requested -
     # this is a manual override, so nothing else in the pipeline will emit
@@ -2209,6 +2485,8 @@ class ManualAdvanceRequest(BaseModel):
     # milestone right after this call. Defaults to staying in manual mode so
     # repeated /advance calls keep walking the shipment forward on demand.
     resume_gps_tracking: bool = False
+    # Testing only: bypass the "truck must be at the pickup" location check.
+    skip_location_check: bool = False
 
 
 async def advance_milestone_manually(truck_number: str, job_number: str, payload: ManualAdvanceRequest = None) -> dict:
@@ -2245,6 +2523,18 @@ async def advance_milestone_manually(truck_number: str, job_number: str, payload
         )
     if t.finished:
         raise HTTPException(status_code=400, detail="This shipment is already finished.")
+
+    # Validate location BEFORE pausing GPS tracking or emitting anything.
+    # Only the "Arrived at Pickup Hub" step needs it (later steps - Waiting,
+    # Picked Up - follow on from an arrival that was already validated).
+    if (
+        not payload.skip_location_check
+        and t.active.type in ("pickup", "pickup_stop")
+        and t.shipment_status not in (
+            ShipmentStatus.ARRIVED_AT_PICKUP_HUB, ShipmentStatus.WAITING_FOR_PICKUP,
+        )
+    ):
+        await _assert_truck_at_pickup(t)
 
     if t.task:
         t.task.cancel()
